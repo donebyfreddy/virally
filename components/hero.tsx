@@ -49,9 +49,12 @@ export function Hero() {
           <a href="#" className="transition-colors hover:text-foreground">How it works</a>
           <a href="#" className="transition-colors hover:text-foreground">Pricing</a>
         </nav>
-        <Button asChild size="sm" className="rounded-full bg-foreground text-background hover:bg-foreground/90">
-          <Link href="/dashboard">Start free</Link>
-        </Button>
+        <Link
+          href="/dashboard"
+          className="inline-flex h-7 items-center justify-center rounded-full bg-foreground px-2.5 text-[0.8rem] font-medium text-background transition-colors hover:bg-foreground/90"
+        >
+          Start free
+        </Link>
       </header>
 
       {/* Content */}
@@ -88,16 +91,13 @@ export function Hero() {
             className="animate-fade-up mt-9 flex flex-col gap-3 sm:flex-row sm:items-center"
             style={{ animationDelay: "0.28s" }}
           >
-            <Button
-              asChild
-              size="lg"
-              className="group h-12 rounded-full bg-gradient-to-r from-brand to-accent-2 px-7 text-base font-semibold text-white shadow-lg shadow-brand/30 transition-transform hover:scale-[1.03] hover:from-brand hover:to-accent-2"
+            <Link
+              href="/dashboard"
+              className="group inline-flex h-12 items-center justify-center rounded-full bg-gradient-to-r from-brand to-accent-2 px-7 text-base font-semibold text-white shadow-lg shadow-brand/30 transition-transform hover:scale-[1.03] hover:from-brand hover:to-accent-2"
             >
-              <Link href="/dashboard">
-                Start creating
-                <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
-              </Link>
-            </Button>
+              Start creating
+              <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </Link>
             <Button
               size="lg"
               variant="ghost"
