@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import { ArrowRight, PlayCircle, Sparkles, TrendingUp, Wand2, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -48,8 +49,8 @@ export function Hero() {
           <a href="#" className="transition-colors hover:text-foreground">How it works</a>
           <a href="#" className="transition-colors hover:text-foreground">Pricing</a>
         </nav>
-        <Button size="sm" className="rounded-full bg-foreground text-background hover:bg-foreground/90">
-          Start free
+        <Button asChild size="sm" className="rounded-full bg-foreground text-background hover:bg-foreground/90">
+          <Link href="/dashboard">Start free</Link>
         </Button>
       </header>
 
@@ -88,11 +89,14 @@ export function Hero() {
             style={{ animationDelay: "0.28s" }}
           >
             <Button
+              asChild
               size="lg"
               className="group h-12 rounded-full bg-gradient-to-r from-brand to-accent-2 px-7 text-base font-semibold text-white shadow-lg shadow-brand/30 transition-transform hover:scale-[1.03] hover:from-brand hover:to-accent-2"
             >
-              Start creating
-              <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
+              <Link href="/dashboard">
+                Start creating
+                <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
+              </Link>
             </Button>
             <Button
               size="lg"
