@@ -8,6 +8,16 @@ vi.mock("@/lib/generation/fal-provider", () => ({
   },
 }))
 
+vi.mock("@/lib/generation/job-store", () => {
+  const jobs = new Map<string, { idempotencyKey: string }>()
+  return {
+    JOB_STORE_DURABILITY: "neon-postgres",
+    findJobByIdempotencyKey: async (key: string) => [...jobs.values()].find((job) => job.idempotencyKey === key),
+    createJob: async (job: { id: string; idempotencyKey: string }) => { jobs.set(job.id, job); return job },
+    saveJob: async <T,>(job: T) => job,
+  }
+})
+
 import { POST } from "./route"
 
 const input = {

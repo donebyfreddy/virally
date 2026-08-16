@@ -13,13 +13,13 @@ export async function POST(request: Request) {
     if (!process.env.FAL_KEY) return NextResponse.json({ error: "FAL_KEY is not configured on the server." }, { status: 503 })
     const idempotencyKey = request.headers.get("Idempotency-Key")
     if (!idempotencyKey || idempotencyKey.length < 16) return NextResponse.json({ error: "A valid Idempotency-Key header is required." }, { status: 400 })
-    const existing = findJobByIdempotencyKey(idempotencyKey)
+    const existing = await findJobByIdempotencyKey(idempotencyKey)
     if (existing) return NextResponse.json({ job: existing, duplicate: true })
 
     const input = planRequestSchema.parse(await request.json())
     const plan = createGenerationPlan(input)
     const now = new Date().toISOString()
-    const job: StoredGenerationJob = createJob({
+    const job: StoredGenerationJob = await createJob({
       id: crypto.randomUUID(), idempotencyKey, status: "QUEUED", stage: "Planning generation", createdAt: now, updatedAt: now,
       estimatedCredits: plan.estimate.credits,
       scenes: plan.scenes.map((scene) => ({ sceneId: scene.sceneId, modelId: scene.modelId, providerModelId: scene.providerModelId, status: scene.modelId === "virally-motion" ? "APPROVED" : "PENDING" })),
@@ -43,8 +43,8 @@ export async function POST(request: Request) {
     }
     job.status = job.scenes.some(({ status }) => status === "FAILED") ? "FAILED" : "GENERATING_VIDEO"
     job.stage = job.status === "FAILED" ? "A scene failed during provider submission" : "Generating scenes"
-    saveJob(job)
-    return NextResponse.json({ job, durability: JOB_STORE_DURABILITY }, { status: 202 })
+    const savedJob = await saveJob(job)
+    return NextResponse.json({ job: savedJob, durability: JOB_STORE_DURABILITY }, { status: 202 })
   } catch (error) {
     if (error instanceof ZodError) return NextResponse.json({ error: "Invalid generation request", issues: error.issues }, { status: 400 })
     return NextResponse.json({ error: error instanceof Error ? error.message : "Generation submission failed" }, { status: 422 })
