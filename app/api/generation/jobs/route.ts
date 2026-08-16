@@ -22,17 +22,16 @@ export async function POST(request: Request) {
     const job: StoredGenerationJob = await createJob({
       id: crypto.randomUUID(), idempotencyKey, status: "QUEUED", stage: "Planning generation", createdAt: now, updatedAt: now,
       estimatedCredits: plan.estimate.credits,
-      scenes: plan.scenes.map((scene) => ({ sceneId: scene.sceneId, modelId: scene.modelId, providerModelId: scene.providerModelId, status: scene.modelId === "virally-motion" ? "APPROVED" : "PENDING" })),
+      scenes: plan.scenes.map((scene) => ({ sceneId: scene.sceneId, modelId: scene.modelId, providerModelId: scene.providerModelId, status: "PENDING" })),
     })
     const provider = new FalQueueProvider()
     for (const plannedScene of plan.scenes) {
       const storedScene = job.scenes.find(({ sceneId }) => sceneId === plannedScene.sceneId)!
-      if (plannedScene.modelId === "virally-motion") continue
       const scene = input.scenes.find(({ id }) => id === plannedScene.sceneId)!
       try {
         const providerInput: Record<string, unknown> = { prompt: plannedScene.prompt, duration: String(scene.durationSeconds), aspect_ratio: input.settings.aspectRatio, generate_audio: input.settings.audio === "native" }
         if (scene.referenceUrls[0]) providerInput.start_image_url = scene.referenceUrls[0]
-        const submission = await provider.submit({ modelId: plannedScene.modelId, generationMethod: scene.generationMethod, providerInput })
+        const submission = await provider.submit({ modelId: plannedScene.modelId, generationMethod: plannedScene.generationMethod, providerInput })
         storedScene.providerRequestId = submission.providerRequestId
         storedScene.providerModelId = submission.providerModelId
         storedScene.status = "QUEUED"

@@ -40,4 +40,14 @@ describe("generation job submission", () => {
     expect(await duplicate.json()).toMatchObject({ duplicate: true })
     expect(submitMock).toHaveBeenCalledTimes(1)
   })
+
+  it("submits programmatic storyboard treatments to a real video provider", async () => {
+    const idempotencyKey = `test-${crypto.randomUUID()}`
+    const request = new Request("http://localhost/api/generation/jobs", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey }, body: JSON.stringify({ ...input, scenes: [{ ...input.scenes[0], generationMethod: "programmatic" }] }) })
+    const response = await POST(request)
+    const body = await response.json()
+    expect(response.status).toBe(202)
+    expect(body.job.scenes[0]).toMatchObject({ modelId: "kling-3-pro", status: "QUEUED", providerRequestId: "fal-request-1" })
+    expect(submitMock).toHaveBeenCalledWith(expect.objectContaining({ modelId: "kling-3-pro", generationMethod: "text_to_video" }))
+  })
 })

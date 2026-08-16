@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { planRequestSchema, type PlanRequest } from "./domain"
-import { buildMediaPrompt, createGenerationPlan, estimateGeneration, providerUsdToCredits, retryPolicy, routeScene, validateStoryboardTiming } from "./engine"
+import { buildMediaPrompt, createGenerationPlan, estimateGeneration, providerGenerationMethod, providerUsdToCredits, retryPolicy, routeScene, validateStoryboardTiming } from "./engine"
 
 const request: PlanRequest = planRequestSchema.parse({
   brief: { topic: "Turn one idea into a content week", platform: "tiktok", durationSeconds: 10, language: "English", audience: "Solo creators", objective: "followers", format: "Educational", tone: "Direct", cta: "Follow" },
@@ -12,8 +12,9 @@ const request: PlanRequest = planRequestSchema.parse({
 })
 
 describe("generation engine", () => {
-  it("routes programmatic and video scenes independently", () => {
-    expect(routeScene(request.scenes[0], request.settings).id).toBe("virally-motion")
+  it("routes programmatic treatments through a real video provider", () => {
+    expect(routeScene(request.scenes[0], request.settings).type).toBe("video")
+    expect(providerGenerationMethod(request.scenes[0].generationMethod)).toBe("text_to_video")
     expect(routeScene(request.scenes[1], request.settings).type).toBe("video")
   })
   it("rejects an incompatible manual model override", () => {

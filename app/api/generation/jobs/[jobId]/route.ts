@@ -6,6 +6,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ job
   const { jobId } = await params
   const job = await getJob(jobId)
   if (!job) return NextResponse.json({ error: "Generation job was not found." }, { status: 404 })
+  let hasLegacyPlaceholder = false
+  for (const scene of job.scenes) {
+    if (scene.modelId === "virally-motion" && !scene.outputUrl) {
+      scene.status = "FAILED"
+      scene.error = "This legacy placeholder was not sent to a video provider. Regenerate the project to create a real scene asset."
+      hasLegacyPlaceholder = true
+    }
+  }
+  if (hasLegacyPlaceholder) {
+    job.status = "FAILED"
+    job.stage = "A legacy scene needs regeneration"
+    return NextResponse.json({ job: await saveJob(job) })
+  }
   if (!process.env.FAL_KEY || job.status === "COMPLETED" || job.status === "FAILED") return NextResponse.json({ job })
   const provider = new FalQueueProvider()
   for (const scene of job.scenes.filter(({ status, providerRequestId }) => (status === "QUEUED" || status === "GENERATING") && providerRequestId)) {

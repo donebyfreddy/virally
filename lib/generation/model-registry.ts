@@ -20,11 +20,6 @@ export type ModelDefinition = {
 }
 
 export const MODEL_REGISTRY = {
-  "virally-motion": {
-    id: "virally-motion", label: "Image + motion", provider: "virally", providerModelId: "virally/programmatic-motion", type: "programmatic",
-    modes: ["programmatic"], resolutions: ["720p", "1080p", "4k"], aspectRatios: ["9:16", "16:9", "1:1", "4:3", "3:4", "21:9"], duration: { min: 1, max: 60 }, audio: false, referenceImages: true, referenceVideos: false, qualityTier: "fast",
-    pricing: { unit: "programmatic", usd: 0.005 }, status: "enabled", schemaVerifiedAt: "2026-08-16",
-  },
   "flux-2-pro": {
     id: "flux-2-pro", label: "FLUX.2 Pro", provider: "fal", providerModelId: "fal-ai/flux-2-pro", type: "image",
     modes: ["text_to_image"], resolutions: ["720p", "1080p"], aspectRatios: ["9:16", "16:9", "1:1", "4:3", "3:4", "21:9"], duration: null, audio: false, referenceImages: false, referenceVideos: false, qualityTier: "quality",

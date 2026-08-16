@@ -9,8 +9,17 @@ export function providerUsdToCredits(usd: number) {
   return Math.max(CREDIT_CONFIG.minimumCharge, Math.ceil(usd * CREDIT_CONFIG.markup * CREDIT_CONFIG.creditsPerDollar))
 }
 
+/**
+ * A programmatic scene describes the desired editing treatment, but this app
+ * does not have a programmatic renderer. Submit it as a real text-to-video
+ * request so every generated scene is backed by a provider asset.
+ */
+export function providerGenerationMethod(method: ScenePlan["generationMethod"]) {
+  return method === "programmatic" ? "text_to_video" : method
+}
+
 function supports(model: ModelDefinition, scene: ScenePlan, settings: GenerationSettings) {
-  return model.modes.includes(scene.generationMethod) && model.resolutions.includes(settings.resolution) && model.aspectRatios.includes(settings.aspectRatio) && (!model.duration || (scene.durationSeconds >= model.duration.min && scene.durationSeconds <= model.duration.max)) && (scene.referenceUrls.length === 0 || model.referenceImages)
+  return model.modes.includes(providerGenerationMethod(scene.generationMethod)) && model.resolutions.includes(settings.resolution) && model.aspectRatios.includes(settings.aspectRatio) && (!model.duration || (scene.durationSeconds >= model.duration.min && scene.durationSeconds <= model.duration.max)) && (scene.referenceUrls.length === 0 || model.referenceImages)
 }
 
 export function routeScene(scene: ScenePlan, settings: GenerationSettings): ModelDefinition {
@@ -21,7 +30,6 @@ export function routeScene(scene: ScenePlan, settings: GenerationSettings): Mode
     if (!supports(model, scene, settings)) throw new Error(`${model.label} does not support this scene's method, duration, resolution, aspect ratio, or references`)
     return model
   }
-  if (scene.generationMethod === "programmatic") return getModel("virally-motion")!
   if (scene.generationMethod === "text_to_image") return getModel("flux-2-pro")!
   const candidates = listAvailableModels("video").filter((model) => supports(model, scene, settings))
   const ranked = candidates.sort((a, b) => {
@@ -68,5 +76,5 @@ export function createGenerationPlan(request: PlanRequest) {
   const timing = validateStoryboardTiming(request)
   if (!timing.valid) throw new Error(`Storyboard duration is ${timing.actualSeconds}s but the brief targets ${timing.targetSeconds}s`)
   const estimate = estimateGeneration(request)
-  return { status: "READY" as const, timing, estimate, retry: retryPolicy(request.settings.preset), scenes: request.scenes.map((scene) => { const model = routeScene(scene, request.settings); return { sceneId: scene.id, modelId: model.id, providerModelId: model.providerModelId, prompt: buildMediaPrompt(scene, request.brief) } }) }
+  return { status: "READY" as const, timing, estimate, retry: retryPolicy(request.settings.preset), scenes: request.scenes.map((scene) => { const model = routeScene(scene, request.settings); return { sceneId: scene.id, modelId: model.id, providerModelId: model.providerModelId, generationMethod: providerGenerationMethod(scene.generationMethod), prompt: buildMediaPrompt(scene, request.brief) } }) }
 }
