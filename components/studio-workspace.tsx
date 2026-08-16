@@ -5,6 +5,7 @@ import {
   Bell, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clapperboard,
   CreditCard, Crown, FileText, FolderKanban, Grid2X2, LayoutDashboard, Lock,
   Menu, MoreHorizontal, Plus, Settings2, Sparkles, Timer, WandSparkles, X, Zap,
+  type LucideIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -51,7 +52,6 @@ export function StudioWorkspace() {
   const [view, setView] = useState<StudioView>("brief")
   const [completed, setCompleted] = useState<Completion>({ brief: false, strategy: false, storyboard: false, review: false })
   const [hydrated, setHydrated] = useState(false)
-  const [savedAt, setSavedAt] = useState("Saved just now")
   const [menuOpen, setMenuOpen] = useState(false)
   const [activeScene, setActiveScene] = useState(1)
   const [editingScene, setEditingScene] = useState<number | null>(null)
@@ -59,32 +59,32 @@ export function StudioWorkspace() {
   const [toast, setToast] = useState("")
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(storageKey)
-    let restoredCompletion: Completion = { brief: false, strategy: false, storyboard: false, review: false }
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as { draft?: Draft; completed?: Completion }
-        if (parsed.draft) setDraft(parsed.draft)
-        if (parsed.completed) { restoredCompletion = parsed.completed; setCompleted(parsed.completed) }
-      } catch { window.localStorage.removeItem(storageKey) }
-    }
-    const requestedStep = stepFromUrl()
-    const allowedStep = requestedStep === "review" && !restoredCompletion.storyboard
-      ? restoredCompletion.strategy ? "storyboard" : restoredCompletion.brief ? "strategy" : "brief"
-      : requestedStep === "storyboard" && !restoredCompletion.strategy
-        ? restoredCompletion.brief ? "strategy" : "brief"
-        : requestedStep === "strategy" && !restoredCompletion.brief ? "brief" : requestedStep
-    setView(allowedStep)
-    setHydrated(true)
+    const hydrationTimer = window.setTimeout(() => {
+      const stored = window.localStorage.getItem(storageKey)
+      let restoredCompletion: Completion = { brief: false, strategy: false, storyboard: false, review: false }
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored) as { draft?: Draft; completed?: Completion }
+          if (parsed.draft) setDraft(parsed.draft)
+          if (parsed.completed) { restoredCompletion = parsed.completed; setCompleted(parsed.completed) }
+        } catch { window.localStorage.removeItem(storageKey) }
+      }
+      const requestedStep = stepFromUrl()
+      const allowedStep = requestedStep === "review" && !restoredCompletion.storyboard
+        ? restoredCompletion.strategy ? "storyboard" : restoredCompletion.brief ? "strategy" : "brief"
+        : requestedStep === "storyboard" && !restoredCompletion.strategy
+          ? restoredCompletion.brief ? "strategy" : "brief"
+          : requestedStep === "strategy" && !restoredCompletion.brief ? "brief" : requestedStep
+      setView(allowedStep)
+      setHydrated(true)
+    }, 0)
+    return () => window.clearTimeout(hydrationTimer)
   }, [])
 
   useEffect(() => {
     if (!hydrated) return
     window.localStorage.setItem(storageKey, JSON.stringify({ draft, completed }))
     window.history.replaceState(null, "", `${window.location.pathname}?step=${view}`)
-    setSavedAt("Saving…")
-    const timer = window.setTimeout(() => setSavedAt("Saved just now"), 420)
-    return () => window.clearTimeout(timer)
   }, [draft, completed, view, hydrated])
 
   const currentStep = flow.findIndex((step) => step.id === view)
@@ -134,7 +134,7 @@ export function StudioWorkspace() {
         <div className="flex items-center gap-2"><button className="hidden rounded-lg p-2 text-white/50 sm:block"><CircleHelp className="size-5" /></button><button className="relative rounded-lg p-2 text-white/50"><Bell className="size-5" /><span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-fuchsia-400" /></button><Button variant="outline" size="sm" onClick={() => notify("Draft saved locally")} className="hidden rounded-lg border-white/10 bg-white/[0.03] text-white hover:bg-white/10 hover:text-white md:flex"><FileText className="size-3.5" /> Save draft</Button></div>
       </header>
       <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 lg:px-10">
-        <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end"><div><p className="mb-2 flex items-center gap-2 text-xs font-medium text-fuchsia-300"><Sparkles className="size-3.5" /> New content project</p><h1 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">Create your next standout post</h1><p className="mt-2 text-sm text-white/48">Strategy before generation. Every choice stays editable.</p></div><div className="flex items-center gap-2 text-xs text-white/45"><span className="inline-flex size-5 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-400/10 text-emerald-300"><Check className="size-3" /></span>{savedAt}</div></div>
+        <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end"><div><p className="mb-2 flex items-center gap-2 text-xs font-medium text-fuchsia-300"><Sparkles className="size-3.5" /> New content project</p><h1 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">Create your next standout post</h1><p className="mt-2 text-sm text-white/48">Strategy before generation. Every choice stays editable.</p></div><div className="flex items-center gap-2 text-xs text-white/45"><span className="inline-flex size-5 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-400/10 text-emerald-300"><Check className="size-3" /></span>Saved just now</div></div>
         <div className="mt-8 flex items-center gap-1 overflow-x-auto pb-1">{flow.map((step, index) => { const accessible = canVisit(step.id); return <button key={step.id} disabled={!accessible} onClick={() => changeView(step.id)} className={`flex shrink-0 items-center gap-2 ${accessible ? "cursor-pointer" : "cursor-not-allowed"}`}><span className={`flex size-7 items-center justify-center rounded-full border text-xs font-semibold transition ${currentStep > index || completed[step.id] ? "border-fuchsia-400/40 bg-fuchsia-500 text-white" : currentStep === index ? "border-fuchsia-400 bg-fuchsia-500/15 text-fuchsia-200" : "border-white/15 text-white/30"}`}>{completed[step.id] ? <Check className="size-3.5" /> : accessible ? index + 1 : <Lock className="size-3" />}</span><span className={`text-sm ${currentStep === index ? "font-medium text-white" : accessible ? "text-white/55" : "text-white/30"}`}>{step.label}</span>{index < flow.length - 1 && <span className="mx-3 h-px w-8 bg-white/10 sm:w-14" />}</button> })}</div>
         {view === "brief" && <BriefView draft={draft} patch={patchDraft} />}
         {view === "strategy" && <StrategyView draft={draft} patch={patchDraft} />}
@@ -164,7 +164,7 @@ function PresetPicker({ preset, onChange }: { preset: QualityPreset; onChange: (
 function StudioNav({ onCreate, notify }: { onCreate: () => void; notify: (message: string) => void }) { return <aside className="fixed inset-y-0 left-0 z-30 hidden w-[236px] border-r border-white/[0.07] bg-[#100c19]/80 px-3 py-5 backdrop-blur-xl lg:flex lg:flex-col"><a className="mb-9 flex items-center gap-2.5 px-3" href="#"><span className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-fuchsia-500 to-violet-600 shadow-lg shadow-fuchsia-900/50"><Zap className="size-4 fill-white" /></span><span className="font-display text-lg font-bold tracking-tight">Virally</span></a><Button onClick={onCreate} className="mb-6 h-11 w-full justify-start rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-600 px-3 font-semibold text-white shadow-lg shadow-fuchsia-950/30 hover:from-fuchsia-500 hover:to-violet-600"><Plus className="size-4" /> Create content</Button><nav className="space-y-1"><NavItem icon={LayoutDashboard} label="Overview" /><NavItem icon={WandSparkles} label="AI Studio" active /><NavItem icon={FolderKanban} label="Content library" badge="12" /><NavItem icon={Grid2X2} label="Campaigns" /><NavItem icon={Clapperboard} label="Publish" /></nav><p className="mb-2 mt-7 px-3 text-[10px] font-semibold uppercase tracking-[.15em] text-white/35">Workspace</p><nav className="space-y-1"><NavItem icon={CreditCard} label="Credits & billing" /><NavItem icon={Settings2} label="Settings" /></nav><div className="mt-auto rounded-2xl border border-white/[0.08] bg-white/[.035] p-3.5"><div className="flex items-center justify-between"><span className="text-xs text-white/55">Monthly credits</span><Crown className="size-3.5 text-amber-300" /></div><p className="mt-1 font-display text-xl font-semibold">426 <span className="text-xs font-medium text-white/40">/ 600</span></p><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full w-[71%] rounded-full bg-gradient-to-r from-fuchsia-500 to-violet-500" /></div><button onClick={() => notify("Credit management is ready to connect to your billing provider")} className="mt-3 text-xs font-medium text-fuchsia-300 hover:text-white">Manage plan →</button></div><div className="mt-4 flex items-center gap-2.5 border-t border-white/[.07] px-2 pt-4"><div className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-cyan-300 to-violet-500 text-xs font-bold text-violet-950">FM</div><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">Federico M.</p><p className="truncate text-[11px] text-white/40">Personal workspace</p></div><MoreHorizontal className="size-4 text-white/40" /></div></aside> }
 function BriefPreview({ draft }: { draft: Draft }) { return <aside className="rounded-2xl border border-white/[0.08] bg-[#130e1e]/80 p-5"><p className="text-xs font-medium uppercase tracking-[.13em] text-white/35">Creative brief preview</p><div className="mt-5 flex items-center gap-3"><div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-violet-600"><WandSparkles className="size-5" /></div><div><p className="text-sm font-semibold">Creator growth story</p><p className="text-xs text-white/40">{draft.platform} · {draft.duration}</p></div></div><div className="mt-6 space-y-4 border-t border-white/[.07] pt-5"><PreviewLine label="Objective" value={draft.objective} /><PreviewLine label="Format" value={draft.format} /><PreviewLine label="Audience" value={draft.audience} /><PreviewLine label="Tone" value={draft.tone} /></div></aside> }
 function StrategySidebar({ draft }: { draft: Draft }) { return <aside className="rounded-2xl border border-white/[0.08] bg-[#130e1e]/80 p-5"><p className="text-xs font-medium uppercase tracking-[.13em] text-white/35">Creative blueprint</p><div className="mt-5 space-y-5"><PreviewLine label="Objective" value={draft.objective} /><PreviewLine label="Tone" value={draft.tone} /><PreviewLine label="Pacing" value={`Fast · ${draft.scenes.length} scenes`} /><PreviewLine label="CTA" value={draft.cta} /></div><div className="mt-7 rounded-xl border border-cyan-400/15 bg-cyan-400/[.05] p-3"><p className="text-xs font-medium text-cyan-100">Platform adaptation</p><p className="mt-1 text-xs leading-relaxed text-white/45">Caption-safe lower third and direct first-person delivery for {draft.platform}.</p></div></aside> }
-function NavItem({ icon: Icon, label, badge, active }: { icon: any; label: string; badge?: string; active?: boolean }) { return <button className={`flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm transition ${active ? "bg-white/[.08] font-medium text-white" : "text-white/52 hover:bg-white/[.05] hover:text-white"}`}><Icon className={`size-4 ${active ? "text-fuchsia-300" : ""}`} /><span>{label}</span>{badge && <span className="ml-auto rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] text-white/55">{badge}</span>}</button> }
+function NavItem({ icon: Icon, label, badge, active }: { icon: LucideIcon; label: string; badge?: string; active?: boolean }) { return <button className={`flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm transition ${active ? "bg-white/[.08] font-medium text-white" : "text-white/52 hover:bg-white/[.05] hover:text-white"}`}><Icon className={`size-4 ${active ? "text-fuchsia-300" : ""}`} /><span>{label}</span>{badge && <span className="ml-auto rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] text-white/55">{badge}</span>}</button> }
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) { return <label className="mt-7 block text-sm font-medium">{label}{required && <span className="text-fuchsia-300"> *</span>}{children}</label> }
 function Picker({ label, value, items, onSelect }: { label: string; value: string; items: string[]; onSelect: (item: string) => void }) { return <label className="block text-sm font-medium">{label}<div className="relative mt-2"><select value={value} onChange={(event) => onSelect(event.target.value)} className="studio-input h-11 appearance-none pr-9"><option className="bg-[#21172f]">{value}</option>{items.filter((item) => item !== value).map((item) => <option className="bg-[#21172f]" key={item}>{item}</option>)}</select><ChevronDown className="pointer-events-none absolute right-3 top-3 size-4 text-white/35" /></div></label> }
 function TextField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label className="block text-xs text-white/48">{label}<input value={value} onChange={(event) => onChange(event.target.value)} className="studio-input mt-1.5 h-10 text-xs" /></label> }

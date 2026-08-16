@@ -1,4 +1,5 @@
 import { Heart, MessageCircle, Music2, Play, Share2 } from "lucide-react"
+import Image from "next/image"
 
 export function PhoneMockup() {
   return (
@@ -7,9 +8,12 @@ export function PhoneMockup() {
       <div className="relative rounded-[2.6rem] border border-white/15 bg-black p-2 shadow-2xl shadow-brand/20 ring-1 ring-white/5">
         <div className="relative aspect-[9/19] overflow-hidden rounded-[2.1rem] bg-secondary">
           {/* Preview media */}
-          <img
+          <Image
             src="/creator-preview.png"
             alt="Content creator recording a short-form video preview inside the Virally app"
+            fill
+            sizes="272px"
+            priority
             className="absolute inset-0 h-full w-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30" />
