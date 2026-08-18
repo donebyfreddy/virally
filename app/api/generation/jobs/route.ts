@@ -22,7 +22,17 @@ export async function POST(request: Request) {
     const job: StoredGenerationJob = await createJob({
       id: crypto.randomUUID(), idempotencyKey, status: "QUEUED", stage: "Planning generation", createdAt: now, updatedAt: now,
       estimatedCredits: plan.estimate.credits,
-      scenes: plan.scenes.map((scene) => ({ sceneId: scene.sceneId, modelId: scene.modelId, providerModelId: scene.providerModelId, status: "PENDING" })),
+      brief: input.brief,
+      settings: input.settings,
+      scenes: plan.scenes.map((plannedScene) => {
+        const scene = input.scenes.find(({ id }) => id === plannedScene.sceneId)!
+        return {
+          sceneId: plannedScene.sceneId, order: scene.order, durationSeconds: scene.durationSeconds, purpose: scene.purpose,
+          spokenText: scene.spokenText, onScreenText: scene.onScreenText, transition: scene.transition,
+          modelId: plannedScene.modelId, providerModelId: plannedScene.providerModelId, prompt: plannedScene.prompt,
+          status: "PENDING" as const, reviewStatus: "GENERATING" as const, currentVersion: 0, versions: [],
+        }
+      }),
     })
     const provider = new FalQueueProvider()
     for (const plannedScene of plan.scenes) {
@@ -35,8 +45,10 @@ export async function POST(request: Request) {
         storedScene.providerRequestId = submission.providerRequestId
         storedScene.providerModelId = submission.providerModelId
         storedScene.status = "QUEUED"
+        storedScene.reviewStatus = "GENERATING"
       } catch (error) {
         storedScene.status = "FAILED"
+        storedScene.reviewStatus = "FAILED"
         storedScene.error = error instanceof Error ? error.message : "Provider submission failed"
       }
     }

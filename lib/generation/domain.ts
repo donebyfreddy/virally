@@ -59,6 +59,36 @@ export type PlanRequest = z.infer<typeof planRequestSchema>
 export type GenerationJobStatus = "DRAFT" | "PLANNING" | "READY" | "QUEUED" | "GENERATING_KEYFRAMES" | "GENERATING_VIDEO" | "QUALITY_CHECK" | "REGENERATING" | "COMPOSING" | "RENDERING" | "COMPLETED" | "FAILED" | "CANCELLED"
 export type SceneJobStatus = "PENDING" | "QUEUED" | "GENERATING" | "REVIEWING" | "APPROVED" | "FAILED" | "REGENERATING"
 
+/**
+ * Review status is the human-facing state of a generated scene. It is tracked
+ * separately from the provider lifecycle (`SceneJobStatus`) so that approving or
+ * regenerating a single scene never disturbs the underlying generation records.
+ */
+export type SceneReviewStatus = "GENERATING" | "READY_FOR_REVIEW" | "APPROVED" | "REJECTED" | "REGENERATING" | "FAILED"
+
+export const sceneQaReportSchema = z.object({
+  visualQuality: z.enum(["good", "fair", "poor", "unknown"]),
+  promptAdherence: z.enum(["high", "medium", "low", "unknown"]),
+  artifactRisk: z.enum(["low", "medium", "high"]),
+  textArtifact: z.boolean(),
+  notes: z.array(z.string()).max(12).default([]),
+  assessedAt: z.string(),
+})
+export type SceneQaReport = z.infer<typeof sceneQaReportSchema>
+
+/** Overrides a user may apply when regenerating a single scene. */
+export const regenerationOverridesSchema = z.object({
+  modelId: z.string().min(1).optional(),
+  prompt: z.string().trim().min(3).max(5_000).optional(),
+  preset: presetSchema.optional(),
+  durationSeconds: z.number().int().min(1).max(30).optional(),
+  referenceUrls: z.array(z.url()).max(12).optional(),
+}).default({})
+export type RegenerationOverrides = z.infer<typeof regenerationOverridesSchema>
+
+/** Distinguishes cheap deterministic re-render edits from expensive AI regeneration. */
+export type ChangeKind = "render_only" | "generative"
+
 export type CostEstimate = {
   providerCostUsd: number
   credits: number
