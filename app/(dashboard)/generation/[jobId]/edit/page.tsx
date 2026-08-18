@@ -1,0 +1,6 @@
+import { EditProgress } from "@/components/edit-progress"
+
+export default async function Page({ params }: { params: Promise<{ jobId: string }> }) {
+  const { jobId } = await params
+  return <EditProgress jobId={jobId} />
+}
