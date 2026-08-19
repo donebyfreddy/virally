@@ -61,7 +61,7 @@ describe("content item mapping", () => {
     expect(item.thumbnailUrl).toBe("https://fal.media/s1.mp4")
   })
   it("surfaces the failure reason for failed projects", () => {
-    const item = toContentItem(job({ status: "FAILED", scenes: [scene("s1", { reviewStatus: "FAILED", outputUrl: undefined, providerError: { code: "403", message: "The selected model is unavailable for this account.", timestamp: "t", forbidden: true, retryable: true } })] }))
+    const item = toContentItem(job({ status: "FAILED", scenes: [scene("s1", { reviewStatus: "FAILED", outputUrl: undefined, providerError: { code: "403", message: "The selected model is unavailable for this account.", timestamp: "t", forbidden: true, retryable: true, billing: false } })] }))
     expect(item.status).toBe("FAILED")
     expect(item.failureReason).toMatch(/unavailable for this account/)
   })

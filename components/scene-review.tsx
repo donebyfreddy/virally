@@ -9,7 +9,7 @@ import { RegenerateDialog, type RegenerateResult } from "@/components/regenerate
 
 type QaReport = { visualQuality: string; promptAdherence: string; artifactRisk: string; textArtifact: boolean; notes: string[] }
 type Version = { version: number; modelId: string; outputUrl?: string; createdAt: string }
-type ProviderErrorDetails = { code: string; message: string; response?: string; requestId?: string; timestamp: string; forbidden: boolean; retryable: boolean }
+type ProviderErrorDetails = { code: string; message: string; response?: string; requestId?: string; timestamp: string; forbidden: boolean; retryable: boolean; billing?: boolean }
 type ReviewScene = {
   sceneId: string; order: number; durationSeconds: number; purpose: string
   modelId: string; status: string; reviewStatus: string; outputUrl?: string; error?: string; providerError?: ProviderErrorDetails
@@ -247,8 +247,10 @@ function SceneCard({ scene, busy, versionsOpen, onToggleVersions, onApprove, onR
       {failed && (
         <div className="border-b border-white/[.07] bg-rose-500/[.05] px-5 py-4">
           <p className="flex items-center gap-2 text-xs font-semibold text-rose-200"><AlertTriangle className="size-4" /> Generation failed</p>
-          <p className="mt-2 text-xs leading-relaxed text-rose-100/80">Provider: Kling ({scene.modelId}). Reason: {scene.providerError?.message ?? scene.error ?? "The provider could not process this scene."}</p>
-          <p className="mt-1 text-[11px] text-rose-100/50">Your other scenes are safe.</p>
+          <p className="mt-2 text-xs leading-relaxed text-rose-100/80">Provider: fal · {scene.modelId}. Reason: {scene.providerError?.message ?? scene.error ?? "The provider could not process this scene."}</p>
+          {scene.providerError?.billing
+            ? <p className="mt-1 text-[11px] text-rose-100/50">This affects every model on the account. <a href="https://fal.ai/dashboard/billing" target="_blank" rel="noreferrer" className="underline">Top up your fal.ai balance</a>, then retry.</p>
+            : <p className="mt-1 text-[11px] text-rose-100/50">Your other scenes are safe.</p>}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button size="sm" disabled={busy} onClick={onRetry} className="rounded-lg bg-white text-[#160d20] hover:bg-white/90">{busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} Retry</Button>
             <Button size="sm" variant="outline" disabled={busy} onClick={onRegenerate} className="rounded-lg border-white/10 bg-white/[.03] text-white hover:bg-white/10 hover:text-white"><WandSparkles className="size-3.5" /> Change model</Button>

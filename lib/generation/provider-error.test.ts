@@ -13,6 +13,14 @@ describe("provider error capture", () => {
     expect(details.response).toContain("req-123")
   })
 
+  it("classifies an exhausted-balance / locked account as a billing issue, not a model issue", () => {
+    const details = describeProviderError({ status: 403, message: "Forbidden", body: { detail: "User is locked. Reason: Exhausted balance. Top up your balance at fal.ai/dashboard/billing." } })
+    expect(details.billing).toBe(true)
+    expect(details.forbidden).toBe(false) // must not trigger cross-model fallback — every model is locked
+    expect(details.retryable).toBe(false)
+    expect(details.message).toMatch(/balance|top up/i)
+  })
+
   it("captures rate limits and server errors as retryable", () => {
     expect(describeProviderError({ status: 429 }).message).toMatch(/rate limit/i)
     expect(describeProviderError({ status: 503 }).retryable).toBe(true)
