@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
+import { outstandingForScene, refundScene, settle } from "@/lib/generation/credits"
 import { FalQueueProvider } from "@/lib/generation/fal-provider"
-import { getJob, saveJob, type StoredGenerationJob } from "@/lib/generation/job-store"
+import { deleteJob, getJob, saveJob, type StoredGenerationJob } from "@/lib/generation/job-store"
+import { describeProviderError, ProviderError } from "@/lib/generation/provider-error"
 import { assessScene } from "@/lib/generation/qa"
 import { completeRegeneration } from "@/lib/generation/review"
 
@@ -45,17 +47,27 @@ export async function GET(_request: Request, { params }: { params: Promise<{ job
         const qa = assessScene({ modelId: scene.modelId, durationSeconds: scene.durationSeconds, onScreenText: scene.onScreenText, spokenText: scene.spokenText })
         if (scene.reviewStatus === "REGENERATING") {
           job = completeRegeneration(job, scene.sceneId, { outputUrl, providerRequestId: scene.providerRequestId, providerModelId: scene.providerModelId, modelId: scene.modelId })
-          job = { ...job, scenes: job.scenes.map((candidate) => candidate.sceneId === scene.sceneId ? { ...candidate, qa, versions: candidate.versions.map((version) => version.version === candidate.currentVersion ? { ...version, qa } : version) } : candidate) }
+          job = { ...job, scenes: job.scenes.map((candidate) => candidate.sceneId === scene.sceneId ? { ...candidate, qa, providerError: undefined, versions: candidate.versions.map((version) => version.version === candidate.currentVersion ? { ...version, qa } : version) } : candidate) }
         } else {
           const version = { version: 1, modelId: scene.modelId, providerModelId: scene.providerModelId, providerRequestId: scene.providerRequestId, outputUrl, prompt: scene.prompt, createdAt: new Date().toISOString(), qa }
-          job = { ...job, scenes: job.scenes.map((candidate) => candidate.sceneId === scene.sceneId ? { ...candidate, outputUrl, status: "REVIEWING" as const, reviewStatus: "READY_FOR_REVIEW" as const, currentVersion: 1, versions: [version], qa } : candidate) }
+          job = { ...job, scenes: job.scenes.map((candidate) => candidate.sceneId === scene.sceneId ? { ...candidate, outputUrl, status: "REVIEWING" as const, reviewStatus: "READY_FOR_REVIEW" as const, currentVersion: 1, versions: [version], qa, providerError: undefined } : candidate) }
         }
+        // Settle the credits reserved for this scene now that it produced an asset.
+        job = { ...job, creditLedger: settle(job.creditLedger ?? [], outstandingForScene(job.creditLedger ?? [], scene.sceneId), scene.sceneId, "scene completed") }
       } else if (status.status === "IN_PROGRESS") {
         job = { ...job, scenes: job.scenes.map((candidate) => candidate.sceneId === scene.sceneId ? { ...candidate, status: "GENERATING" as const } : candidate) }
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to read provider status"
-      job = { ...job, scenes: job.scenes.map((candidate) => candidate.sceneId === scene.sceneId ? { ...candidate, status: "FAILED" as const, reviewStatus: scene.reviewStatus === "REGENERATING" && candidate.versions.at(-1)?.outputUrl ? "READY_FOR_REVIEW" as const : "FAILED" as const, error: message } : candidate) }
+      const details = error instanceof ProviderError ? error.details : describeProviderError(error)
+      // Regeneration failures roll back to the last good version; the credits reserved
+      // for the failed attempt are refunded so a retry never double-charges.
+      const canRollBack = scene.reviewStatus === "REGENERATING"
+      job = { ...job, creditLedger: refundScene(job.creditLedger ?? [], scene.sceneId, "scene failed"), scenes: job.scenes.map((candidate) => {
+        if (candidate.sceneId !== scene.sceneId) return candidate
+        const previous = candidate.versions.at(-1)
+        const rolledBack = canRollBack && previous?.outputUrl
+        return { ...candidate, status: "FAILED" as const, reviewStatus: rolledBack ? "READY_FOR_REVIEW" as const : "FAILED" as const, error: details.message, providerError: details }
+      }) }
     }
   }
 
@@ -63,4 +75,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ job
   job.status = derived.status
   job.stage = derived.stage
   return NextResponse.json({ job: await saveJob(job) })
+}
+
+export async function DELETE(_request: Request, { params }: { params: Promise<{ jobId: string }> }) {
+  const { jobId } = await params
+  const deleted = await deleteJob(jobId)
+  if (!deleted) return NextResponse.json({ error: "Generation job was not found." }, { status: 404 })
+  return NextResponse.json({ deleted: true })
 }

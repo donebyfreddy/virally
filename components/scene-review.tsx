@@ -3,15 +3,16 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
-import { AlertTriangle, ArrowLeft, ArrowRight, Check, Clapperboard, Download, History, LoaderCircle, RefreshCw, RotateCcw, Sparkles, X } from "lucide-react"
+import { AlertTriangle, ArrowLeft, ArrowRight, Check, Clapperboard, Download, History, LoaderCircle, RefreshCw, RotateCcw, Sparkles, WandSparkles, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { RegenerateDialog, type RegenerateResult } from "@/components/regenerate-dialog"
 
 type QaReport = { visualQuality: string; promptAdherence: string; artifactRisk: string; textArtifact: boolean; notes: string[] }
 type Version = { version: number; modelId: string; outputUrl?: string; createdAt: string }
+type ProviderErrorDetails = { code: string; message: string; response?: string; requestId?: string; timestamp: string; forbidden: boolean; retryable: boolean }
 type ReviewScene = {
   sceneId: string; order: number; durationSeconds: number; purpose: string
-  modelId: string; status: string; reviewStatus: string; outputUrl?: string; error?: string
+  modelId: string; status: string; reviewStatus: string; outputUrl?: string; error?: string; providerError?: ProviderErrorDetails
   currentVersion: number; versions: Version[]; qa?: QaReport
 }
 type ReviewJob = { id: string; status: string; scenes: ReviewScene[] }
@@ -95,6 +96,15 @@ export function SceneReview({ jobId }: { jobId: string }) {
     setPollNonce((current) => current + 1)
   }
 
+  async function retry(sceneId: string) {
+    await act(sceneId, () => fetch(`/api/generation/jobs/${jobId}/scenes/${sceneId}/regenerate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": `retry-${sceneId}-${crypto.randomUUID()}` },
+      body: JSON.stringify({}),
+    }), "Retrying scene — your other scenes are safe")
+    setPollNonce((current) => current + 1)
+  }
+
   async function approveAllRemaining() {
     if (!job) return
     for (const scene of job.scenes) {
@@ -148,6 +158,7 @@ export function SceneReview({ jobId }: { jobId: string }) {
               onApprove={() => approve(scene.sceneId)}
               onReject={() => reject(scene.sceneId)}
               onRegenerate={() => setRegenScene(scene)}
+              onRetry={() => retry(scene.sceneId)}
               onRestore={(version) => restore(scene.sceneId, version)}
             />
           ))}
@@ -181,7 +192,7 @@ export function SceneReview({ jobId }: { jobId: string }) {
   )
 }
 
-function SceneCard({ scene, busy, versionsOpen, onToggleVersions, onApprove, onReject, onRegenerate, onRestore }: {
+function SceneCard({ scene, busy, versionsOpen, onToggleVersions, onApprove, onReject, onRegenerate, onRetry, onRestore }: {
   scene: ReviewScene
   busy: boolean
   versionsOpen: boolean
@@ -189,11 +200,14 @@ function SceneCard({ scene, busy, versionsOpen, onToggleVersions, onApprove, onR
   onApprove: () => void
   onReject: () => void
   onRegenerate: () => void
+  onRetry: () => void
   onRestore: (version: number) => void
 }) {
+  const [showDetails, setShowDetails] = useState(false)
   const badge = BADGE[scene.reviewStatus] ?? { label: scene.reviewStatus, className: "bg-white/10 text-white/60" }
   const pending = isPending(scene.reviewStatus)
   const approved = scene.reviewStatus === "APPROVED"
+  const failed = scene.reviewStatus === "FAILED"
   const qaFlag = scene.qa && (scene.qa.textArtifact || scene.qa.artifactRisk === "high")
 
   return (
@@ -230,18 +244,37 @@ function SceneCard({ scene, busy, versionsOpen, onToggleVersions, onApprove, onR
         </div>
       )}
 
-      {scene.error && scene.reviewStatus === "FAILED" && (
-        <div className="border-b border-white/[.07] bg-rose-500/[.05] px-5 py-3 text-xs text-rose-200">{scene.error} Your approved scenes are safe.</div>
+      {failed && (
+        <div className="border-b border-white/[.07] bg-rose-500/[.05] px-5 py-4">
+          <p className="flex items-center gap-2 text-xs font-semibold text-rose-200"><AlertTriangle className="size-4" /> Generation failed</p>
+          <p className="mt-2 text-xs leading-relaxed text-rose-100/80">Provider: Kling ({scene.modelId}). Reason: {scene.providerError?.message ?? scene.error ?? "The provider could not process this scene."}</p>
+          <p className="mt-1 text-[11px] text-rose-100/50">Your other scenes are safe.</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button size="sm" disabled={busy} onClick={onRetry} className="rounded-lg bg-white text-[#160d20] hover:bg-white/90">{busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} Retry</Button>
+            <Button size="sm" variant="outline" disabled={busy} onClick={onRegenerate} className="rounded-lg border-white/10 bg-white/[.03] text-white hover:bg-white/10 hover:text-white"><WandSparkles className="size-3.5" /> Change model</Button>
+            {scene.providerError && <Button size="sm" variant="ghost" onClick={() => setShowDetails((current) => !current)} className="text-white/55 hover:text-white">{showDetails ? "Hide details" : "View details"}</Button>}
+          </div>
+          {showDetails && scene.providerError && (
+            <dl className="mt-3 space-y-1 rounded-lg border border-white/[.08] bg-black/30 p-3 font-mono text-[11px] text-white/55">
+              <div className="flex gap-2"><dt className="text-white/35">code</dt><dd>{scene.providerError.code}</dd></div>
+              {scene.providerError.requestId && <div className="flex gap-2"><dt className="text-white/35">request</dt><dd className="break-all">{scene.providerError.requestId}</dd></div>}
+              <div className="flex gap-2"><dt className="text-white/35">time</dt><dd>{scene.providerError.timestamp}</dd></div>
+              {scene.providerError.response && <div><dt className="text-white/35">response</dt><dd className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap break-all">{scene.providerError.response}</dd></div>}
+            </dl>
+          )}
+        </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2 px-5 py-4">
-        <Button size="sm" disabled={busy || pending || !scene.outputUrl} onClick={onApprove} className={`rounded-lg ${approved ? "bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/20" : "bg-white text-[#160d20] hover:bg-white/90"}`}>
-          {busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <Check className="size-3.5" />} {approved ? "Approved" : "Approve"}
-        </Button>
-        <Button size="sm" variant="outline" disabled={busy || pending} onClick={onRegenerate} className="rounded-lg border-white/10 bg-white/[.03] text-white hover:bg-white/10 hover:text-white"><RefreshCw className="size-3.5" /> Regenerate</Button>
-        {!approved && scene.outputUrl && <Button size="sm" variant="ghost" disabled={busy || pending} onClick={onReject} className="text-white/55 hover:text-white"><X className="size-3.5" /> Reject</Button>}
-        {scene.versions.length > 1 && <Button size="sm" variant="ghost" onClick={onToggleVersions} className="ml-auto text-white/55 hover:text-white"><History className="size-3.5" /> {scene.versions.length} versions</Button>}
-      </div>
+      {!failed && (
+        <div className="flex flex-wrap items-center gap-2 px-5 py-4">
+          <Button size="sm" disabled={busy || pending || !scene.outputUrl} onClick={onApprove} className={`rounded-lg ${approved ? "bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/20" : "bg-white text-[#160d20] hover:bg-white/90"}`}>
+            {busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <Check className="size-3.5" />} {approved ? "Approved" : "Approve"}
+          </Button>
+          <Button size="sm" variant="outline" disabled={busy || pending} onClick={onRegenerate} className="rounded-lg border-white/10 bg-white/[.03] text-white hover:bg-white/10 hover:text-white"><RefreshCw className="size-3.5" /> Regenerate</Button>
+          {!approved && scene.outputUrl && <Button size="sm" variant="ghost" disabled={busy || pending} onClick={onReject} className="text-white/55 hover:text-white"><X className="size-3.5" /> Reject</Button>}
+          {scene.versions.length > 1 && <Button size="sm" variant="ghost" onClick={onToggleVersions} className="ml-auto text-white/55 hover:text-white"><History className="size-3.5" /> {scene.versions.length} versions</Button>}
+        </div>
+      )}
 
       {versionsOpen && scene.versions.length > 1 && (
         <div className="border-t border-white/[.07] bg-black/20 px-5 py-4">

@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server"
 import { z, ZodError } from "zod"
+import { reserve } from "@/lib/generation/credits"
 import { regenerationOverridesSchema } from "@/lib/generation/domain"
 import { compatibleModelsForScene, estimateSceneRegeneration } from "@/lib/generation/edit-engine"
 import { FalQueueProvider } from "@/lib/generation/fal-provider"
-import { providerGenerationMethod } from "@/lib/generation/engine"
 import { getModel } from "@/lib/generation/model-registry"
 import { getJob, saveJob } from "@/lib/generation/job-store"
+import { ProviderError } from "@/lib/generation/provider-error"
 import { beginRegeneration, findScene, scenePrompt } from "@/lib/generation/review"
+import { submitSceneWithFallback } from "@/lib/generation/submit"
 
 const requestSchema = z.object({ overrides: regenerationOverridesSchema.optional() })
 
@@ -58,26 +60,29 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
     if (!model) return NextResponse.json({ error: `Unknown model: ${scene.modelId}` }, { status: 422 })
 
     const prompt = overrides?.prompt ?? scenePrompt(scene, next)
-    const providerInput: Record<string, unknown> = { prompt, duration: String(scene.durationSeconds), aspect_ratio: settings.aspectRatio, generate_audio: settings.audio === "native" }
     const referenceUrl = overrides?.referenceUrls?.[0]
-    if (referenceUrl) providerInput.start_image_url = referenceUrl
+    const generationMethod = model.type === "image" ? "text_to_image" : referenceUrl ? "image_to_video" : "text_to_video"
+    const estimate = estimateSceneRegeneration({ scene: { durationSeconds: scene.durationSeconds, modelId: scene.modelId }, settings, overrides })
 
     try {
       const provider = new FalQueueProvider()
-      const generationMethod = model.type === "image" ? "text_to_image" : referenceUrl ? "image_to_video" : "text_to_video"
-      const submission = await provider.submit({ modelId: scene.modelId, generationMethod: providerGenerationMethod(generationMethod), providerInput })
-      next = { ...next, scenes: next.scenes.map((candidate) => candidate.sceneId === sceneId ? { ...candidate, providerRequestId: submission.providerRequestId, providerModelId: submission.providerModelId, prompt } : candidate) }
+      const { submission, modelId } = await submitSceneWithFallback(provider, scene.modelId, settings, {
+        durationSeconds: scene.durationSeconds, generationMethod, referenceUrls: referenceUrl ? [referenceUrl] : [], prompt,
+      })
+      next = { ...next, creditLedger: reserve(next.creditLedger ?? [], estimate.credits, sceneId, "scene regeneration"), scenes: next.scenes.map((candidate) => candidate.sceneId === sceneId ? { ...candidate, providerRequestId: submission.providerRequestId, providerModelId: submission.providerModelId, modelId, prompt, providerError: undefined } : candidate) }
       next.status = "GENERATING_VIDEO"
       next.stage = `Regenerating scene ${scene.order + 1}`
     } catch (error) {
       // Submission failed — restore the scene to its previous good version; approved work is safe.
+      const details = error instanceof ProviderError ? error.details : undefined
+      const message = details?.message ?? (error instanceof Error ? error.message : "Provider submission failed")
       next = { ...next, scenes: next.scenes.map((candidate) => {
         if (candidate.sceneId !== sceneId) return candidate
         const previous = candidate.versions.at(-1)
-        return { ...candidate, reviewStatus: previous?.outputUrl ? "READY_FOR_REVIEW" as const : "FAILED" as const, status: previous?.outputUrl ? "REVIEWING" as const : "FAILED" as const, outputUrl: previous?.outputUrl ?? candidate.outputUrl, error: error instanceof Error ? error.message : "Provider submission failed" }
+        return { ...candidate, reviewStatus: previous?.outputUrl ? "READY_FOR_REVIEW" as const : "FAILED" as const, status: previous?.outputUrl ? "REVIEWING" as const : "FAILED" as const, outputUrl: previous?.outputUrl ?? candidate.outputUrl, error: message, providerError: details }
       }) }
       await saveJob(next)
-      return NextResponse.json({ error: "Scene regeneration could not be submitted. Your approved scenes are safe.", detail: error instanceof Error ? error.message : undefined }, { status: 502 })
+      return NextResponse.json({ error: "Scene regeneration could not be submitted. Your approved scenes are safe.", providerError: details, detail: message }, { status: 502 })
     }
 
     const saved = await saveJob(next)

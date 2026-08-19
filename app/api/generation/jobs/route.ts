@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server"
 import { ZodError } from "zod"
+import { reserve } from "@/lib/generation/credits"
 import { planRequestSchema } from "@/lib/generation/domain"
 import { createGenerationPlan } from "@/lib/generation/engine"
 import { FalQueueProvider } from "@/lib/generation/fal-provider"
 import { createJob, findJobByIdempotencyKey, JOB_STORE_DURABILITY, saveJob, type StoredGenerationJob } from "@/lib/generation/job-store"
+import { ProviderError } from "@/lib/generation/provider-error"
+import { submitSceneWithFallback } from "@/lib/generation/submit"
 
 export async function POST(request: Request) {
   try {
@@ -35,21 +38,28 @@ export async function POST(request: Request) {
       }),
     })
     const provider = new FalQueueProvider()
+    const creditFor = new Map(plan.estimate.lineItems.map((item) => [item.sceneId, item.credits]))
     for (const plannedScene of plan.scenes) {
       const storedScene = job.scenes.find(({ sceneId }) => sceneId === plannedScene.sceneId)!
       const scene = input.scenes.find(({ id }) => id === plannedScene.sceneId)!
       try {
-        const providerInput: Record<string, unknown> = { prompt: plannedScene.prompt, duration: String(scene.durationSeconds), aspect_ratio: input.settings.aspectRatio, generate_audio: input.settings.audio === "native" }
-        if (scene.referenceUrls[0]) providerInput.start_image_url = scene.referenceUrls[0]
-        const submission = await provider.submit({ modelId: plannedScene.modelId, generationMethod: plannedScene.generationMethod, providerInput })
+        // Reserve credits before the provider call; refunded on failure below (never double-charged).
+        const { submission, modelId } = await submitSceneWithFallback(provider, plannedScene.modelId, input.settings, {
+          durationSeconds: scene.durationSeconds, generationMethod: scene.generationMethod, referenceUrls: scene.referenceUrls, prompt: plannedScene.prompt,
+        })
         storedScene.providerRequestId = submission.providerRequestId
         storedScene.providerModelId = submission.providerModelId
+        storedScene.modelId = modelId
         storedScene.status = "QUEUED"
         storedScene.reviewStatus = "GENERATING"
+        storedScene.providerError = undefined
+        job.creditLedger = reserve(job.creditLedger ?? [], creditFor.get(plannedScene.sceneId) ?? 0, plannedScene.sceneId, "scene submission")
       } catch (error) {
         storedScene.status = "FAILED"
         storedScene.reviewStatus = "FAILED"
-        storedScene.error = error instanceof Error ? error.message : "Provider submission failed"
+        if (error instanceof ProviderError) { storedScene.providerError = error.details; storedScene.error = error.details.message }
+        else storedScene.error = error instanceof Error ? error.message : "Provider submission failed"
+        // No credits are reserved for a scene that never submitted, so nothing to refund.
       }
     }
     job.status = job.scenes.some(({ status }) => status === "FAILED") ? "FAILED" : "GENERATING_VIDEO"

@@ -41,6 +41,13 @@ export function routeScene(scene: ScenePlan, settings: GenerationSettings): Mode
   return ranked[0]
 }
 
+/** Enabled video models that can render this scene, best quality first. Used for fallback routing. */
+export function compatibleVideoModels(scene: ScenePlan, settings: GenerationSettings): ModelDefinition[] {
+  return listAvailableModels("video")
+    .filter((model) => supports(model, scene, settings))
+    .sort((a, b) => Number(b.qualityTier === "cinematic") - Number(a.qualityTier === "cinematic"))
+}
+
 function modelCost(model: ModelDefinition, scene: ScenePlan, settings: GenerationSettings) {
   const base = model.pricing.unit === "second" ? (settings.audio === "native" && model.pricing.audioUsd ? model.pricing.audioUsd : model.pricing.usd) * scene.durationSeconds : model.pricing.usd
   return base * (model.pricing.resolutionMultiplier?.[settings.resolution] ?? 1)

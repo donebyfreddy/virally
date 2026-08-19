@@ -1,2 +1,2 @@
-import { ContentPage } from "@/components/dashboard-pages"
-export default function Page() { return <ContentPage /> }
+import { ContentLibrary } from "@/components/content-library"
+export default function Page() { return <ContentLibrary /> }

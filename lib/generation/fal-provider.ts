@@ -1,6 +1,7 @@
 import "server-only"
 import { fal } from "@fal-ai/client"
 import { getModel } from "./model-registry"
+import { describeProviderError, ProviderError } from "./provider-error"
 
 export type ProviderSubmission = { providerRequestId: string; modelId: string; providerModelId: string; submittedAt: string }
 
@@ -25,8 +26,12 @@ export class FalQueueProvider implements VideoGenerationProvider {
       : generationMethod === "text_to_video" && modelId === "seedance-2"
         ? "bytedance/seedance-2.0/text-to-video"
         : model.providerModelId
-    const result = await fal.queue.submit(providerModelId, { input: providerInput, webhookUrl })
-    return { providerRequestId: result.request_id, modelId, providerModelId, submittedAt: new Date().toISOString() }
+    try {
+      const result = await fal.queue.submit(providerModelId, { input: providerInput, webhookUrl })
+      return { providerRequestId: result.request_id, modelId, providerModelId, submittedAt: new Date().toISOString() }
+    } catch (error) {
+      throw new ProviderError(describeProviderError(error))
+    }
   }
 
   async getStatus({ modelId, providerRequestId, providerModelId }: { modelId: string; providerRequestId: string; providerModelId?: string }) {
